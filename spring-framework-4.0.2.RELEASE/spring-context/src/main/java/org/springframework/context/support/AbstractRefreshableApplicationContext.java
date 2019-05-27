@@ -118,17 +118,35 @@ public abstract class AbstractRefreshableApplicationContext extends AbstractAppl
 	 */
 	@Override
 	protected final void refreshBeanFactory() throws BeansException {
+		//检查是否存在beanFacotry，如果是初次refresh操作是不存在的
 		if (hasBeanFactory()) {
+			//对实现了destory生命周期的对象做 destory回调
 			destroyBeans();
+			//实现AbstractApplicationContext中定义的关闭BeanFactory方法，这里就是将this.beanFactory引用置为null
 			closeBeanFactory();
 		}
 		try {
+			//通过new DefaultListableBeanFactory(getInternalParentBeanFactory())创建DefaultListableBeanFactory，getInternalParentBeanFactory()获取的是
+			//当前应用上下文中设置的父上下文（ConfigurableApplicationContext）对象中的BeanFactory获取父上下文（ApplicationContext）作为BeanFacotry的父级
+			//因此，如果是一个有子父关系的容器，那么它内部的BeanFactory也会建立子父关系，子容器refresh并不会丢失BeanFactory的中的子父关系。
+
 			DefaultListableBeanFactory beanFactory = createBeanFactory();
 			beanFactory.setSerializationId(getId());
+			//配置对象工厂
 			customizeBeanFactory(beanFactory);
+			//这里基于应用上下文给beanFactory进行一次BeanDefinition的加载，
+			//如：ClassPathXmlApplicationContext中构造时指定了xml资源路径会在此触发解析xml中的BeanDefinition
 			loadBeanDefinitions(beanFactory);
 			synchronized (this.beanFactoryMonitor) {
+				//保持一个引用，供容器做BeanFactory相关操作的委托调用
 				this.beanFactory = beanFactory;
+				//看是如何获取的BeanFacotry，
+				//虽然ApplicationContext实现了ListableBeanFactory与HierarchicalBeanFactory跟BeanFactory有关的接口，不过具体的接口实现是通过委托给了
+				//这里获取的ConfigurableListableBeanFactory来处理的。
+				//从下面的obtainFreshBeanFactory()方法中可以看到，AbstractApplicationContext并没有作具体实现，而是通过两个抽象方法定义了refresh的过程
+				//只是定义了 refreshBeanFactory(); 加上 getBeanFactory();这两个抽象操作，对obtainFreshBeanFactory()这一步作了个细分（刷新、获取）。
+				//其中refreshBeanFactory()与getBeanFactory()在AbstractRefreshableApplicationContext中进行实现的。
+
 			}
 		}
 		catch (IOException ex) {

@@ -27,6 +27,11 @@ import org.springframework.beans.BeansException;
  * @author Juergen Hoeller
  * @since 1.0.1
  */
+//关于处理对象销毁的前置回调
+//应用实例：
+//    ApplicationListenerDetector，这个类是用来注册ApplicationListener实例的，而如果销毁一个对象，不接触这里的引用
+//    会导致无法进行回收，因此在销毁对象时，会判断如果是ApplicationListener要执行从监听器列表中移除掉。
+
 public interface DestructionAwareBeanPostProcessor extends BeanPostProcessor {
 
 	/**
@@ -41,6 +46,7 @@ public interface DestructionAwareBeanPostProcessor extends BeanPostProcessor {
 	 * @see org.springframework.beans.factory.DisposableBean
 	 * @see org.springframework.beans.factory.support.AbstractBeanDefinition#setDestroyMethodName
 	 */
+	//这里实现销毁对象的逻辑
 	void postProcessBeforeDestruction(Object bean, String beanName) throws BeansException;
 
 }

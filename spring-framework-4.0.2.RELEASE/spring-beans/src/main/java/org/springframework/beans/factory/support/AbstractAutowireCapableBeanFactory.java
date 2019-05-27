@@ -334,7 +334,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 	//-------------------------------------------------------------------------
 
 	@Override
-	public Object createBean(Class<?> beanClass, int autowireMode, boolean dependencyCheck) throws BeansException {
+	public Object createBean(Class<?>
+			, int autowireMode, boolean dependencyCheck) throws BeansException {
 		// Use non-singleton bean definition, to avoid registering bean as dependent bean.
 		RootBeanDefinition bd = new RootBeanDefinition(beanClass, autowireMode, dependencyCheck);
 		bd.setScope(BeanDefinition.SCOPE_PROTOTYPE);
@@ -449,6 +450,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			logger.debug("Creating instance of bean '" + beanName + "'");
 		}
 		// Make sure bean class is actually resolved at this point.
+		// 通过BeanDefinition解析出要创建的对象的Class
 		resolveBeanClass(mbd, beanName);
 
 		// Prepare method overrides.
@@ -472,6 +474,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 					"BeanPostProcessor before instantiation of bean failed", ex);
 		}
 
+		//真正执行创建bean
 		Object beanInstance = doCreateBean(beanName, mbd, args);
 		if (logger.isDebugEnabled()) {
 			logger.debug("Finished creating instance of bean '" + beanName + "'");
@@ -498,6 +501,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		// Instantiate the bean.
 		BeanWrapper instanceWrapper = null;
 		if (mbd.isSingleton()) {
+			//通过有参、无参构造器或者工厂方法来创建对象，并使用BeanWrapper进行包装创建出来的对象
 			instanceWrapper = this.factoryBeanInstanceCache.remove(beanName);
 		}
 		if (instanceWrapper == null) {
@@ -509,6 +513,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		// Allow post-processors to modify the merged bean definition.
 		synchronized (mbd.postProcessingLock) {
 			if (!mbd.postProcessed) {
+				// 这里调用BeanPostProcessors中类型为MergedBeanDefinitionPostProcessor的postProcessMergedBeanDefinition的回调
 				applyMergedBeanDefinitionPostProcessors(mbd, beanType, beanName);
 				mbd.postProcessed = true;
 			}
@@ -516,6 +521,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 
 		// Eagerly cache singletons to be able to resolve circular references
 		// even when triggered by lifecycle interfaces like BeanFactoryAware.
+		// 这里只是实例化了当前对象，下面在populate属性时，可能会涉及到依赖当前对象的实例创建，而当前对象尚未初始化完毕
+		// 为了能满足被后续对象的创建，这里将当前对象的引用暴露给SingletonBeanRegistry，解决循环依赖
 		boolean earlySingletonExposure = (mbd.isSingleton() && this.allowCircularReferences &&
 				isSingletonCurrentlyInCreation(beanName));
 		if (earlySingletonExposure) {
@@ -534,8 +541,15 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		// Initialize the bean instance.
 		Object exposedObject = bean;
 		try {
+			// 这里进行属性注入（setter注入）、以及进行回调用来依赖检查注入BeanPostProcessor.postProcessPropertyValues(..)
+			//（其中@Autowired 以及@Resource等注解是基于BeanPostProcessor系列回调实现的），属性注入
+
 			populateBean(beanName, mbd, instanceWrapper);
 			if (exposedObject != null) {
+				//这里进行BeanNameAware、BeanClassLoaderAware、BeanFactoryAware
+				//以及执行对象 init方法
+				//并实现BeanPostProcessor.postProcessBeforeInitialization以及BeanPostProcessor.postProcessAfterInitialization
+
 				exposedObject = initializeBean(beanName, exposedObject, mbd);
 			}
 		}
@@ -547,6 +561,9 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 				throw new BeanCreationException(mbd.getResourceDescription(), beanName, "Initialization of bean failed", ex);
 			}
 		}
+		//如果是在initializeBean(..)过程中对前面实例化的对象作了改变，那么此时这个提前暴露出去的对象还被别的对象注入过了的话
+		//就会导致不保证单例对象的唯一性了，这里就是负责检查这种情况存在的，如果存在这种情况，可以通过getBeanNamesOfType 的allowEagerInit设置为false
+		//强制不使用earlyExposed的单例对象。
 
 		if (earlySingletonExposure) {
 			Object earlySingletonReference = getSingleton(beanName, false);
@@ -577,6 +594,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 
 		// Register bean as disposable.
 		try {
+			// 如果对象指定了destroy方法 或者 需要destroy 将此对象注册到disposable列表中（如果是基于其他scope的 注册到对应scope的 destroy回调中）
+
 			registerDisposableBeanIfNecessary(beanName, bean, mbd);
 		}
 		catch (BeanDefinitionValidationException ex) {

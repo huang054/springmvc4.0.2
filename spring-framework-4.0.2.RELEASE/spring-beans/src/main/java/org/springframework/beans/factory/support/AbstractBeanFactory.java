@@ -189,7 +189,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 	//---------------------------------------------------------------------
 	// Implementation of BeanFactory interface
 	//---------------------------------------------------------------------
-
+//调用beanfactory得getbean获取bean实例
 	@Override
 	public Object getBean(String name) throws BeansException {
 		return doGetBean(name, null, null, false);
@@ -229,16 +229,22 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 	 * @return an instance of the bean
 	 * @throws BeansException if the bean could not be created
 	 */
+	//真正执行getbean
 	@SuppressWarnings("unchecked")
 	protected <T> T doGetBean(
 			final String name, final Class<T> requiredType, final Object[] args, boolean typeCheckOnly)
 			throws BeansException {
-
+//别名处理
 		final String beanName = transformedBeanName(name);
 		Object bean;
 
 		// Eagerly check singleton cache for manually registered singletons.
+		//因为singleton对象可以直接注册到 DefaultSingletonBeanRegistry 不用经过mbd
+		//调用DefaultSingletonBeanRegistry的getSingleton方法，前面分析过该方法就是按顺序从singtonObjects，e
+		// arlySingletonObjects， singletonFactories 获取。
+
 		Object sharedInstance = getSingleton(beanName);
+		//判断缓存里面有没实例，有的话直接从缓存里取
 		if (sharedInstance != null && args == null) {
 			if (logger.isDebugEnabled()) {
 				if (isSingletonCurrentlyInCreation(beanName)) {
@@ -255,11 +261,13 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 		else {
 			// Fail if we're already creating this bean instance:
 			// We're assumably within a circular reference.
+			// 对于prototype的实例创建，spring是借助ThreadLocal来设置一个Set 来实现类似于单例对象的循环依赖检查的
 			if (isPrototypeCurrentlyInCreation(beanName)) {
 				throw new BeanCurrentlyInCreationException(beanName);
 			}
 
 			// Check if bean definition exists in this factory.
+			//判断bean得属性是否存在这个beanfactory
 			BeanFactory parentBeanFactory = getParentBeanFactory();
 			if (parentBeanFactory != null && !containsBeanDefinition(beanName)) {
 				// Not found -> check parent.
@@ -279,28 +287,43 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 			}
 
 			try {
+				//这里获取该bean的BeanDefination，如果是父容器中包含对应的BeanDefinition则通过子容器中的去override
 				final RootBeanDefinition mbd = getMergedLocalBeanDefinition(beanName);
+				//检查Definition（这里主要是检查是否为abstract标记的Definition不可创建）
 				checkMergedBeanDefinition(mbd, beanName, args);
 
 				// Guarantee initialization of beans that the current bean depends on.
+				//      // 保证要实例化的对象依赖于的所有对象要先进行实例化（比如在启动前的一些静态依赖项或者数据库准备等）
 				String[] dependsOn = mbd.getDependsOn();
 				if (dependsOn != null) {
 					for (String dependsOnBean : dependsOn) {
+						//这里检查对象循环依赖于对方的情况（比如A实例创建依赖于B、C、D,而在创建C时发现C又依赖于A实例的存在，这样就没办法创建实例了。）
 						if (isDependent(beanName, dependsOnBean)) {
 							throw new BeanCreationException("Circular depends-on relationship between '" +
 									beanName + "' and '" + dependsOnBean + "'");
 						}
+						//将依赖关系注册到依赖列表中，便于后续实例创建时的循环依赖检查
 						registerDependentBean(dependsOnBean, beanName);
+						//进行递归创建bean
 						getBean(dependsOnBean);
 					}
 				}
 
-				// Create bean instance.
+				// Create bean instance
+				// //创建单例bean.
 				if (mbd.isSingleton()) {
+					//单例对象实现，如果已经创建完毕直接从单例缓存中取，如果是初次访问才会调用ObjectFactory触发createBean创建实例。
+					//在创建对象之前 会将当前要创建的对象先添加到singletonsCurrentlyInCreation这个Set中，同时能起到
+					//判断循环依赖注入的问题。
+					//比如A实例的创建需要通过构造器注入B实例，这时会触发B实例的getBean(b) 来创建B的实例，
+					//在创建B的过程中发现B 的构造器需要注入A的实例，而这时 又会进行getBean(a) 这时A实例已经存在于
+					//singletonsCurrentlyInCreation这个Set中，在创建前会先添加进去，如果添加失败，则表示存在循环注入
+
 					sharedInstance = getSingleton(beanName, new ObjectFactory<Object>() {
 						@Override
 						public Object getObject() throws BeansException {
 							try {
+								//真正创建对象的方法 下面具体查看创建的逻辑
 								return createBean(beanName, mbd, args);
 							}
 							catch (BeansException ex) {

@@ -278,5 +278,25 @@ public interface BeanFactory {
 	 * @see #getBean
 	 */
 	String[] getAliases(String name);
+	//FactoryBean在BeanFacotry的实现中有着特殊的处理，如果一个对象实现了FactoryBean 那么通过它get出来的对象实际是
+	//factoryBean.getObject() 得到的对象，如果想得到FactoryBean必须通过在 '&' + beanName 的方式获取
+	//
+	//而ObjectFactory则只是一个普通的对象工厂接口。
+	//在查看AbstractBeanFacotry的doGetBean(..) 部分的源码时，可以看到spring对ObjectFactory的应用之一就是，将创建对象
+	//的步骤封装到ObjectFactory中 交给自定义的Scope来选择是否需要创建对象来灵活的实现scope。
+	//
+	//
+	//通过这方面简单的对比可以得到：
+	//
+	//    FactoryBean的着重于自定义创建对象过程，由BeanFactory通过FactoryBean来获取目标对象，而如果是isSingleton返回true的
+	//    话spring会利用单例缓存来缓存通过FactoryBean创建的对象。
+	//
+	//    而ObjectFactory就是一个普通的工厂对象接口，对于spring在doGetBean处的使用时，在于创建对象的过程由框架通过ObjectFactory定义，而
+	//    创建的时机交给拓展接口Scope，除此之外ObjectFactory就是一个普通的接口。
+	//    此外在将给依赖注入列表注册一个ObjectFactory类型的对象，在注入过程中会调用objectFactory.getObject()来创建目标对象注入进去。
+	//    （如beanFactory.registerResolvableDependency(HttpSession.class, new SessionObjectFactory());）
+	//
+	//    简单来说就是通过FactoryBean你可以控制对象如何创建，而ObjectFactory借助Scope接口自定义scope你可以控制对象的创建时机。
+
 
 }

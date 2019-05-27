@@ -35,6 +35,7 @@ import org.springframework.beans.factory.config.BeanPostProcessor;
  * @author Juergen Hoeller
  * @since 2.5
  */
+//用来将merged BeanDefinition暴露出来的回调
 public interface MergedBeanDefinitionPostProcessor extends BeanPostProcessor {
 
 	/**
@@ -43,6 +44,8 @@ public interface MergedBeanDefinitionPostProcessor extends BeanPostProcessor {
 	 * @param beanType the actual type of the managed bean instance
 	 * @param beanName the name of the bean
 	 */
+	//在bean实例化完毕后调用 可以用来修改merged BeanDefinition的一些properties 或者用来给后续回调中缓存一些meta信息使用
+	//这个算是将merged BeanDefinition暴露出来的一个回调
 	void postProcessMergedBeanDefinition(RootBeanDefinition beanDefinition, Class<?> beanType, String beanName);
 
 }
